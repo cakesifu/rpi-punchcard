@@ -1,17 +1,47 @@
+const moment = require("moment");
+const EventEmitter = require("events");
+const debug = require("debug")("punchcard:manager");
 const Pin = require('./pin');
 
-class PinManager {
+class PinManager extends EventEmitter {
   constructor(schedule) {
-    Object.keys(schedule).map((id) => new Pin(id, config.schedule[id]));
+    super();
+    this.pins = [];
+    const pins = Object.keys(schedule).map((id) => new Pin(id, schedule[id]));
+    this.add(pins);
   }
 
-  add(pins) {
-    if (Array.isArray(pins)) {
-      pins.forEach((pin) => this.add(pin));
+  add(pin) {
+    if (Array.isArray(pin)) {
+      pin.forEach((pin) => this.add(pin));
       return;
     }
 
-    this.pins.push(pins);
+    debug("adding pin %s/%s(%d)", pin.id, pin.name, pin.no);
+
+    pin.on("change", () => this.handlePinChange(pin));
+
+    this.pins.push(pin);
+  }
+
+  start(pollingInterval = 1000) {
+    this.tick();
+    this.intervalId = setInterval(() => this.tick(), pollingInterval);
+  }
+
+  stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+  }
+
+  tick() {
+    const time = moment();
+    this.pins.forEach((pin) => pin.setTime(time));
+  }
+
+  handlePinChange(pin) {
+    this.emit("change", pin);
   }
 }
 
